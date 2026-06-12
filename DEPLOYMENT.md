@@ -93,7 +93,15 @@ done
 
 ## Screenshots
 
-*(Đặt ảnh chụp vào thư mục `screenshots/`)*
-- `screenshots/ui.png` — giao diện chat trên URL public
-- `screenshots/render-live.png` — dashboard Render báo "Live"
-- `screenshots/test.png` — kết quả test endpoint
+### 1. Giao diện chat trên URL public
+Hỏi "Đi Đà Nẵng có gì chơi?" → agent trả lời đúng.
+
+![Giao diện chat](screenshots/ui.png)
+
+### 2. Production Readiness Check — 20/20 (100%)
+
+![Check 100%](screenshots/check-100.png)
+
+### 3. Render dashboard — service Deployed (Live)
+
+![Render Deployed](screenshots/render-live.png)
