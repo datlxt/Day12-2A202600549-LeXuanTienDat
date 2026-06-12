@@ -1,23 +1,22 @@
 services:
   - type: web
-    name: ai-agent-production
+    name: travel-agent-vn
     runtime: docker
+    rootDir: 06-lab-complete
     region: singapore
-    plan: starter
+    plan: free
     healthCheckPath: /health
     autoDeploy: true
     envVars:
       - key: ENVIRONMENT
         value: production
+      - key: APP_NAME
+        value: Tro Ly Du Lich Viet Nam
       - key: APP_VERSION
         value: "1.0.0"
-      - key: OPENAI_API_KEY
-        sync: false
       - key: AGENT_API_KEY
-        generateValue: true
-      - key: JWT_SECRET
-        generateValue: true
+        value: demo-key-123
       - key: DAILY_BUDGET_USD
         value: "5.0"
       - key: RATE_LIMIT_PER_MINUTE
-        value: "20"
+        value: "10"
