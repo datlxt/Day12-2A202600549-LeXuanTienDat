@@ -48,4 +48,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     || exit 1
 
 # Đọc $PORT từ môi trường (Render/Railway cấp), mặc định 8000 cho local
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2"]
+# 1 worker để vừa RAM gói free (512MB)
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
