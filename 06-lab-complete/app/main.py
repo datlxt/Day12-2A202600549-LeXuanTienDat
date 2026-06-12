@@ -26,6 +26,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Security, Depends, Request, Response
 from fastapi.security.api_key import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 import uvicorn
 
@@ -145,7 +146,8 @@ async def request_middleware(request: Request, call_next):
         # Security headers
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers.pop("server", None)
+        if "server" in response.headers:
+            del response.headers["server"]
         duration = round((time.time() - start) * 1000, 1)
         logger.info(json.dumps({
             "event": "request",
@@ -172,12 +174,134 @@ class AskResponse(BaseModel):
     model: str
     timestamp: str
 
+
+# ─────────────────────────────────────────────────────────
+# Giao diện chat (HTML + JS thuần, không cần framework)
+# ─────────────────────────────────────────────────────────
+HTML_UI = """<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🇻🇳 Trợ Lý Du Lịch Việt Nam</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif;
+         background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+         min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .app { width: 100%; max-width: 520px; background: #fff; border-radius: 20px;
+         box-shadow: 0 20px 60px rgba(0,0,0,.25); overflow: hidden; display: flex; flex-direction: column; height: 90vh; }
+  header { background: linear-gradient(135deg, #c0392b, #e74c3c); color: #fff; padding: 18px 20px; }
+  header h1 { font-size: 1.25rem; display: flex; align-items: center; gap: 8px; }
+  header p { font-size: .8rem; opacity: .9; margin-top: 4px; }
+  .key-row { background: #fff7e6; padding: 8px 20px; display: flex; gap: 8px; align-items: center; font-size: .8rem; border-bottom: 1px solid #f0e0c0; }
+  .key-row input { flex: 1; padding: 6px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: .8rem; }
+  #chat { flex: 1; overflow-y: auto; padding: 18px; background: #faf7f2; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 80%; padding: 11px 15px; border-radius: 16px; line-height: 1.5; font-size: .92rem; white-space: pre-wrap; }
+  .bot { background: #fff; border: 1px solid #eee; align-self: flex-start; border-bottom-left-radius: 4px; }
+  .user { background: #e74c3c; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 18px; background: #faf7f2; }
+  .chip { background: #fff; border: 1px solid #e74c3c; color: #e74c3c; border-radius: 20px;
+          padding: 5px 12px; font-size: .78rem; cursor: pointer; }
+  .chip:hover { background: #e74c3c; color: #fff; }
+  form { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid #eee; background: #fff; }
+  input#q { flex: 1; padding: 12px 14px; border: 1px solid #ddd; border-radius: 24px; font-size: .95rem; outline: none; }
+  button { background: #e74c3c; color: #fff; border: none; border-radius: 24px; padding: 0 20px; font-size: .95rem; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+</style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>🇻🇳 Trợ Lý Du Lịch Việt Nam</h1>
+      <p>Hỏi mình về điểm đến, ẩm thực, lịch trình du lịch Việt Nam</p>
+    </header>
+    <div class="key-row">
+      🔑 API Key: <input id="apikey" value="demo-key-123" />
+    </div>
+    <div id="chat">
+      <div class="msg bot">Xin chào! 👋 Mình là Trợ Lý Du Lịch Việt Nam. Bạn muốn đi đâu chơi?</div>
+    </div>
+    <div class="chips">
+      <span class="chip">Đi Đà Nẵng có gì chơi?</span>
+      <span class="chip">Hội An buổi tối</span>
+      <span class="chip">Ẩm thực Hà Nội</span>
+      <span class="chip">Lịch trình miền Trung</span>
+    </div>
+    <form id="f">
+      <input id="q" placeholder="Nhập câu hỏi du lịch..." autocomplete="off" />
+      <button id="send" type="submit">Gửi</button>
+    </form>
+  </div>
+<script>
+  const chat = document.getElementById('chat');
+  const form = document.getElementById('f');
+  const q = document.getElementById('q');
+  const send = document.getElementById('send');
+
+  function add(text, who) {
+    const d = document.createElement('div');
+    d.className = 'msg ' + who;
+    d.textContent = text;
+    chat.appendChild(d);
+    chat.scrollTop = chat.scrollHeight;
+    return d;
+  }
+
+  async function ask(question) {
+    add(question, 'user');
+    const typing = add('Đang soạn câu trả lời...', 'bot');
+    send.disabled = true;
+    try {
+      const res = await fetch('/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json',
+                   'X-API-Key': document.getElementById('apikey').value },
+        body: JSON.stringify({ question })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        typing.textContent = data.answer;
+      } else if (res.status === 401) {
+        typing.textContent = '🔒 Sai hoặc thiếu API key. Kiểm tra ô API Key phía trên.';
+      } else if (res.status === 429) {
+        typing.textContent = '⏳ Bạn hỏi nhanh quá! Vui lòng chờ một chút rồi thử lại.';
+      } else {
+        typing.textContent = '⚠️ Lỗi: ' + (data.detail || res.status);
+      }
+    } catch (e) {
+      typing.textContent = '⚠️ Không kết nối được tới server.';
+    } finally {
+      send.disabled = false;
+    }
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = q.value.trim();
+    if (!text) return;
+    q.value = '';
+    ask(text);
+  });
+
+  document.querySelectorAll('.chip').forEach(c =>
+    c.addEventListener('click', () => ask(c.textContent)));
+</script>
+</body>
+</html>"""
+
 # ─────────────────────────────────────────────────────────
 # Endpoints
 # ─────────────────────────────────────────────────────────
 
-@app.get("/", tags=["Info"])
-def root():
+@app.get("/", response_class=HTMLResponse, tags=["UI"])
+def home():
+    """Giao diện chat Trợ Lý Du Lịch Việt Nam."""
+    return HTML_UI
+
+
+@app.get("/info", tags=["Info"])
+def info():
     return {
         "app": settings.app_name,
         "version": settings.app_version,
